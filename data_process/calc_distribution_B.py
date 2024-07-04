@@ -8,6 +8,32 @@ import numpy as np
 import matplotlib.pyplot as plt
 from multiprocessing import Pool
 
+import numpy as np
+
+def compute_freq_and_fft_power(series, sampling_rate = 1):
+    """
+    Compute the frequency and power spectrum of a given time series using rfft.
+    
+    Parameters:
+    - series: numpy array, the input time series data.
+    - sampling_rate: float, the sampling rate of the time series data.
+    
+    Returns:
+    - freq: numpy array, the frequencies corresponding to the rFFT components.
+    - fft_pow: numpy array, the power spectrum of the rFFT components.
+    """
+    # Compute the rFFT of the input series
+    fft_result = np.fft.rfft(series)
+    
+    # Compute the corresponding frequencies
+    n = len(series)
+    freq = np.fft.rfftfreq(n, d=1/sampling_rate)
+    
+    # Compute the power spectrum
+    fft_pow = np.abs(fft_result)**2 / n
+    
+    return freq, fft_pow
+
 def process_file(nt, file, nvar, nx, ny, nz, xgrid, ygrid, zgrid):
     t, uu = read_output_location(file, 0, 0, 0, nvar, nx, ny, nz)
     print('t = {:.3f}'.format(t))
@@ -95,6 +121,7 @@ def process_file(nt, file, nvar, nx, ny, nz, xgrid, ygrid, zgrid):
 
     var_list = ['rho', 'vx', 'vy', 'vz', 'Bx', 'By', 'Bz', 'p', 'Babs', 'vabs']
 
+    # === plot histogram === #
     for var in var_list:
         os.makedirs('./figure/{}'.format(var), exist_ok=True)
 
@@ -126,6 +153,42 @@ def process_file(nt, file, nvar, nx, ny, nz, xgrid, ygrid, zgrid):
         fig.savefig('./figure/{}/distribution_{:03d}.png'.format(var, nt))
 
         plt.close()
+
+    # === plot power spectrum === #
+    for var in var_list:
+        fig, ax = plt.subplots(1, 1, figsize=(6, 4), layout='constrained')
+        plt.sca(ax)
+
+        # compile psd
+        wave_num, psd = compute_freq_and_fft_power(var_dict[var])
+
+        # plot
+        plt.plot(wave_num, psd, color='C1')
+        plt.xscale('log', base=10)
+        plt.yscale('log', base=10)
+        plt.xlabel(r'$k', fontsize=14)
+        plt.ylabel(r'$P(k)$', fontsize=14)
+        plt.title(r'$var= %s, t = %.3f$' % (var, t))
+
+        fig.suptitle(r'$var= %s, t = %.3f$' % (var, t))
+        fig.savefig('./figure/{}_psd/{:03d}.png'.format(var, nt))
+
+        plt.close()
+
+    # ===  plot var cut === #
+    for var in var_list:
+        fig, ax = plt.subplots(1, 1, figsize=(6, 4), layout='constrained')
+        plt.sca(ax)
+
+        # extract cut from var
+        var_cut = var_dict[var][:, 10, 10]
+
+        # plot
+        plt.plot(var_cut, color='C1')
+        plt.title(r'$var= %s, t = %.3f$' % (var, t))
+
+        fig.suptitle(r'$var= %s, t = %.3f$' % (var, t))
+        fig.savefig('./figure/{}_cut/{:03d}.png'.format(var, nt))
 
     # ====== Time spent ====== #
     time1 = perf_counter()
