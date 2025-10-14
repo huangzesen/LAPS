@@ -7,6 +7,7 @@ import glob
 import numpy as np
 import matplotlib.pyplot as plt
 from multiprocessing import Pool
+from tqdm import tqdm
 
 import numpy as np
 
@@ -34,12 +35,12 @@ def compute_freq_and_fft_power(series, sampling_rate = 1):
     
     return freq, fft_pow
 
-def process_file(nt, file, nvar, nx, ny, nz, xgrid, ygrid, zgrid):
+def process_file(nt, file, nvar, nx, ny, nz, xgrid, ygrid, zgrid, verbose=False):
     t, uu = read_output_location(file, 0, 0, 0, nvar, nx, ny, nz)
-    print('t = {:.3f}'.format(t))
+    if verbose: print('t = {:.3f}'.format(t))
 
     if os.path.exists('./output/Babs_ds_{:03d}.npy'.format(nt)):
-        print('Downsampled File exists, skip...')
+        if verbose: print('Downsampled File exists, skip...')
         rho_ds = np.load('./output/rho_ds_{:03d}.npy'.format(nt))
         vx_ds = np.load('./output/vx_ds_{:03d}.npy'.format(nt))
         vy_ds = np.load('./output/vy_ds_{:03d}.npy'.format(nt))
@@ -67,10 +68,10 @@ def process_file(nt, file, nvar, nx, ny, nz, xgrid, ygrid, zgrid):
         print("Number of Points: {}".format(len(Bx.flatten())))
 
         time1 = perf_counter()
-        print('Time spent: {:.3E} sec'.format(time1 - time0))
+        if verbose: print('Time spent: {:.3E} sec'.format(time1 - time0))
 
         # downsample
-        print('Begin downsample...')
+        if verbose: print('Begin downsample...')
         time0 = perf_counter()
 
         rho_ds = downsample(rho, xgrid, ygrid, zgrid, factor=2)[0]
@@ -113,7 +114,7 @@ def process_file(nt, file, nvar, nx, ny, nz, xgrid, ygrid, zgrid):
         'vabs': vabs_ds
     }
 
-    print('Begin calculate distribution...')
+    if verbose: print('Begin calculate distribution...')
     time0 = perf_counter()
 
     # ====== create figures ====== #
@@ -154,31 +155,11 @@ def process_file(nt, file, nvar, nx, ny, nz, xgrid, ygrid, zgrid):
 
         plt.close()
 
-    # === plot power spectrum === #
-    for var in var_list:
-        fig, ax = plt.subplots(1, 1, figsize=(6, 4), layout='constrained')
-        plt.sca(ax)
-
-        # compile psd
-        wave_num, psd = compute_freq_and_fft_power(var_dict[var])
-
-        # plot
-        plt.plot(wave_num, psd, color='C1')
-        plt.xscale('log', base=10)
-        plt.yscale('log', base=10)
-        plt.xlabel(r'$k', fontsize=14)
-        plt.ylabel(r'$P(k)$', fontsize=14)
-        plt.title(r'$var= %s, t = %.3f$' % (var, t))
-
-        fig.suptitle(r'$var= %s, t = %.3f$' % (var, t))
-        fig.savefig('./figure/{}_psd/{:03d}.png'.format(var, nt))
-
-        plt.close()
-
     # ===  plot var cut === #
     for var in var_list:
         fig, ax = plt.subplots(1, 1, figsize=(6, 4), layout='constrained')
         plt.sca(ax)
+        os.makedirs('./figure/{}_cut'.format(var), exist_ok=True)
 
         # extract cut from var
         var_cut = var_dict[var][:, 10, 10]
@@ -190,9 +171,35 @@ def process_file(nt, file, nvar, nx, ny, nz, xgrid, ygrid, zgrid):
         fig.suptitle(r'$var= %s, t = %.3f$' % (var, t))
         fig.savefig('./figure/{}_cut/{:03d}.png'.format(var, nt))
 
+        plt.close()
+
+    # === plot vvec and Bvec === #
+    os.makedirs('./figure/vec_compare', exist_ok=True)
+    fig, axes = plt.subplots(6, 1, figsize=(6, 12), layout='constrained')
+    for i1, var in enumerate(['vx', 'Bx', 'vy', 'By', 'vz', 'Bz']):
+        ax = axes[i1]
+        plt.sca(ax)
+
+        # extract cut from var
+        var_cut = var_dict[var][:, 10, 10]
+
+        # plot
+        plt.plot(var_cut, color='C1')
+        plt.title(r'$var= %s, t = %.3f$' % (var, t))
+
+        # show label
+        plt.ylabel(var, fontsize=14)
+
+        fig.suptitle(r'$var= %s, t = %.3f$' % (var, t))
+        fig.savefig('./figure/vec_compare/{:03d}.png'.format(nt))
+
+        plt.close()
+
     # ====== Time spent ====== #
     time1 = perf_counter()
-    print('Time spent: {:.2F} sec'.format(time1 - time0))
+    if verbose: print('Time spent: {:.2F} sec'.format(time1 - time0))
+
+    return 1
 
 
 if __name__ == '__main__':
@@ -213,6 +220,10 @@ if __name__ == '__main__':
     nout = len(files)
 
     # Create a pool of processes
-    with Pool(processes=16) as pool:
-        # Map the process_file function to the list of files
-        pool.starmap(process_file, [(nt, files[nt], nvar, nx, ny, nz, xgrid, ygrid, zgrid) for nt in range(nout)])
+    with Pool(processes=18) as pool:
+        # Create a list of arguments for starmap
+        args = [(nt, files[nt], nvar, nx, ny, nz, xgrid, ygrid, zgrid) for nt in range(nout)]
+        
+        # Map the process_file function to the list of files with a progress bar
+        for _ in tqdm(pool.starmap(process_file, args), total=nout):
+            pass

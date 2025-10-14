@@ -1,19 +1,16 @@
-FORTRAN=mpif90
+FORTRAN ?= mpif90
 
-sysname=$(uname -n)
 UNAME := $(shell uname)
-
-fftwpath=/usr/local
-# fftwpath=/cm/shared/apps/spack/cpu/opt/spack/linux-centos8-zen2/intel-19.1.1.217/fftw-3.3.8-aeockdon5bukmh3bmztjsfvnpmtlluyx
+FFTW_PREFIX ?= /opt/homebrew
 
 ifeq ($(UNAME), Darwin)
-	OPTIONS =  -O3 -fdefault-real-8 -I/usr/local/include -L/usr/local/lib -lfftw3
+	OPTIONS = -O3 -fdefault-real-8 -I$(FFTW_PREFIX)/include -L$(FFTW_PREFIX)/lib -lfftw3 -lfftw3_threads
 endif
 ifeq ($(UNAME), Linux)
-	OPTIONS =   -O3  -r8 -I/opt/fftw/3.3.4/intel/mvapich2_ib/include -L/opt/fftw/3.3.4/intel/mvapich2_ib/lib -lfftw3
+	OPTIONS = -O3 -r8 -I$(FFTW_PREFIX)/include -L$(FFTW_PREFIX)/lib -lfftw3
 endif
 
-OPTIONS = -O3 -r8 -I$(fftwpath)/include -L$(fftwpath)/lib -lfftw3
+OPTIONS ?= -O3 -r8 -I$(FFTW_PREFIX)/include -L$(FFTW_PREFIX)/lib -lfftw3
 
 EXE = mhd.exe 
 MAIN = mhd.f90 
@@ -44,7 +41,6 @@ $(OBJ1): $(SRC1)
 
 clean:
 	rm *.o *.mod
-
 
 
 
